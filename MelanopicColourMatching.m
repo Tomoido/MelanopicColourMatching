@@ -15,6 +15,7 @@
 % http://color.psych.upenn.edu/brainard/papers/Brainard_Stockman_Colorimetry.pdf
 %   10.3 Fundamentals of colorimetry
 %   104. Color ordinate systems ? "Colour-Matching Functions" and "Cone Fundamentals"
+% http://www.ling.upenn.edu/courses/ling525/color_vision.html
 
 
 % CONE SPECTRAL SENSITIVITIES
