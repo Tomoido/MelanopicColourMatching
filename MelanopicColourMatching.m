@@ -64,23 +64,25 @@ wls2 = repmat(wls,1,n_snb);
 spd1 = zeros(n_wls,n_snb);
 spd2 = zeros(n_wls,n_snb);
 
-sigma = 5; % stdev of gaussian
+sigma = 2; % stdev of gaussian
 gauss = @(height,position)height.*exp(-((wls-position).^2)/(2*sigma^2));
 
 for i=1:n_snb
-    spd1(wls2(:,i)==wls_snb(i),i)=1;  % should this be 1?
-    
-    % using delta function for primaries
-    % spd2(wls2(:,i)==r_snb,i)=T_rgb(i,1);  % delta function 
-    % spd2(wls2(:,i)==g_snb,i)=T_rgb(i,2);  % delta function
-    % spd2(wls2(:,i)==b_snb,i)=T_rgb(i,3);  % delta function
+    % using delta function for primaries and test lights
+    % spd1(wls2(:,i)==wls_snb(i),i)=1;  % test light
+    % spd2(wls2(:,i)==r_snb,i)=T_rgb(i,1);  % red priamry
+    % spd2(wls2(:,i)==g_snb,i)=T_rgb(i,2);  % green primary
+    % spd2(wls2(:,i)==b_snb,i)=T_rgb(i,3);  % blue primary
     
     % using gaussian function with FMWH ~ 2.4*sigma
+    spd1(:,i) = spd1(:,i)+gauss(1,wls_snb(i));
     spd2(:,i) = spd2(:,i)+gauss(T_rgb(i,1),r_snb)+gauss(T_rgb(i,2),g_snb)+gauss(T_rgb(i,3),b_snb);
 end
 
-% plot match spectra
-figure; plot(wls,spd2)
+% plot test and match spectra
+figure; plot(wls,spd1); title('test spectra');
+figure; plot(wls,spd2); title('match spectra');
+
 
 % Look at cone and melanopsin contrast
 mel_cont = mel*(spd1-spd2)./(mel*(spd2));
