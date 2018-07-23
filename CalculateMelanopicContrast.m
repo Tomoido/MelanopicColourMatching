@@ -41,6 +41,9 @@ figure; hold on;
 plot(test_wls,CMF(:,1), 'r', 'LineWidth', 2)
 plot(test_wls,CMF(:,2), 'g', 'LineWidth', 2)
 plot(test_wls,CMF(:,3), 'b', 'LineWidth', 2)
+title(['CMF for primaries: r(' num2str(round(primaries(1))) ') g('...
+    num2str(round(primaries(2))) ') b(' num2str(round(primaries(3))) ')']);
+legend({'r','g','b'})
 
 % construct test and match spectra
 n_test = length(test_wls);
@@ -93,12 +96,11 @@ S_cont = (S_stimt-S_stimm)./(S_stimm);
 mel_cont = (mel_stimt-mel_stimm)./(mel_stimm);
 
 % plot cone and melanopic stimulation as a function of wavelength
-f = figure;
+f = figure; hold on;
 p = uipanel('Parent',f,'BorderType','none'); 
 p.Title = ['For primaries: r(' num2str(round(primaries(1))) ') g('...
     num2str(round(primaries(2))) ') b(' num2str(round(primaries(3))) ')']; 
-p.TitlePosition = 'centertop';  p.FontSize = 14; p.FontWeight = 'bold';
-hold on;  
+p.TitlePosition = 'centertop';  p.FontSize = 14; p.FontWeight = 'bold'; 
 subplot(4,2,[1 2 3 4],'Parent',p); hold on; 
 plot(test_wls,L_stimt,'r'); plot(test_wls,L_stimm,'rx');
 plot(test_wls,M_stimt,'g'); plot(test_wls,M_stimm,'gx');  
@@ -122,13 +124,17 @@ plot(test_wls(mel_wls),mel_stimt,'c'); plot(test_wls(mel_wls),mel_stimm,'cx');
 title('melanopsin stimulation'); plot(xlim, [0,0], 'k:'); 
 
 % plot melanopsin contrast and difference in stimulation separately
-figure; hold on
-subplot(3,1,1); hold on; plot(test_wls(mel_wls),mel_stimt, 'c', 'LineWidth', 2); 
+f = figure; hold on;
+p = uipanel('Parent',f,'BorderType','none'); 
+p.Title = ['For primaries: r(' num2str(round(primaries(1))) ') g('...
+    num2str(round(primaries(2))) ') b(' num2str(round(primaries(3))) ')']; 
+p.TitlePosition = 'centertop';  p.FontSize = 14; p.FontWeight = 'bold';
+subplot(3,1,1,'Parent',p); hold on; plot(test_wls(mel_wls),mel_stimt, 'c', 'LineWidth', 2); 
 plot(test_wls(mel_wls),mel_stimm, 'cx', 'LineWidth', 2); 
 plot(xlim, [0,0], 'k:');  title('Melanopsin stimulation'); 
 legend({'melanopsin test', 'melanopsin match',''})
-subplot(3,1,2); hold on; plot(test_wls(mel_wls),mel_diff, 'c', 'LineWidth', 2); 
+subplot(3,1,2,'Parent',p); hold on; plot(test_wls(mel_wls),mel_diff, 'c', 'LineWidth', 2); 
 title('Melanopic stimulation difference'); plot(xlim, [0,0], 'k:')
-subplot(3,1,3); hold on; plot(test_wls(mel_wls),mel_cont, 'c', 'LineWidth', 2); 
+subplot(3,1,3,'Parent',p); hold on; plot(test_wls(mel_wls),mel_cont, 'c', 'LineWidth', 2); 
 title('Melanopic contrast'); plot(xlim, [0,0], 'k:')
 

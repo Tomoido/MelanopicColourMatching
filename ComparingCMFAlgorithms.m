@@ -34,7 +34,7 @@ n_test = length(test_wls);
 startp = [-1,1,1]; 
 minp = [-5,-5,-5]; 
 maxp = [5,5,5];
-options = optimoptions('fmincon','Display', 'none',...
+options = optimoptions('fmincon','Display', 'iter',...
     'Algorithm','sqp', ...
     'OptimalityTolerance',      0,...
     'StepTolerance',            0,...
@@ -81,7 +81,7 @@ for i=1:n_test
     cont_CMF(i,:) = return_CMF(i,:,position(i));
 end
 
-% saving output CMFs
+saving output CMFs
 save('algorithm_CMFs','cont_CMF','diff_CMF','ndiff_CMF')
 
 
