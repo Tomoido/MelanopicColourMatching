@@ -13,8 +13,8 @@
 
 clear 
 mat = csvread('sbrgb10w.csv'); % load Stiles and Burch benchmark data
-wls_snb = mat(:, 1);
-snb_rgb = mat(:, 2:4);
+test_wls = mat(:, 1);
+snb_CMF = mat(:, 2:4);
 r_match = round(645.16);
 g_match = round(526.32);
 b_match = round(444.44);
@@ -23,129 +23,129 @@ primaries = [r_match,g_match,b_match];
 % load cone sensitivities
 wls = (390:1:830)'; 
 S = WlsToS(wls);
-receptorObjFieldSize10Deg = SSTReceptorHuman('S', S, 'fieldSizeDeg', 10);
-T_receptors = receptorObjFieldSize10Deg.T.T_energyNormalized; % starting with normlized
+receptorObj= SSTReceptorHuman('S', S, 'fieldSizeDeg', 10);
+T_receptors = receptorObj.T.T_energyNormalized; % starting with normlized
 L = T_receptors(1,:);
 M = T_receptors(2,:);
 S = T_receptors(3,:);
 
 % set up parameters for minimization algorithms
-n_test = length(wls_snb);
+n_test = length(test_wls);
 startp = [-1,1,1]; 
 minp = [-5,-5,-5]; 
 maxp = [5,5,5];
 options = optimoptions('fmincon','Display', 'none',...
+    'Algorithm','sqp', ...
     'OptimalityTolerance',      0,...
     'StepTolerance',            0,...
     'MaxIterations',            3e3,...
     'MaxFunctionEvaluations',   3e3);
 
 
-% algorithm minimizing squared difference in normalized stimulation
+% 1. Algorithm minimizing squared difference in normalized stimulation
 for i=1:n_test
-    [ndiff_rgb(i,:), ndiff_fval(i)] = fmincon(@(T_rgb)opt_primaries_diff...
-        (T_rgb,wls(i),primaries,[L;M;S]),startp,...
+    [ndiff_CMF(i,:), ndiff_fval(i)] = fmincon(@(T_rgb)opt_primaries_diff...
+        (T_rgb,test_wls(i),primaries,[L;M;S]),startp,...
         [],[],[],[],minp,maxp,[], options);
 end
 
 
-% algorithm minimizing squared difference in absolute stimulation
+% 2. Algorithm minimizing squared difference in absolute stimulation
 % loading non-normalized cone sensitivities
-T_receptors = receptorObjFieldSize10Deg.T.T_energy;
+T_receptors = receptorObj.T.T_energy;
 L = T_receptors(1,:);
 M = T_receptors(2,:);
 S = T_receptors(3,:);
 mel = T_receptors(4,:);
 
 for i=1:n_test
-    [diff_rgb(i,:), diff_fval(i)] = fmincon(@(T_rgb)opt_primaries_diff...
-        (T_rgb,wls(i),primaries,[L;M;S]),startp,...
+    [diff_CMF(i,:), diff_fval(i)] = fmincon(@(T_rgb)opt_primaries_diff...
+        (T_rgb,test_wls(i),primaries,[L;M;S]),startp,...
         [],[],[],[],minp,maxp,[], options);
 end
 
 
-% algorithm minimizing squared cone contrast
+% 3. Algorithm minimizing squared cone contrast
 % adding more starting values: where each primary is negative once
 startp = [-1,1,1; 1,-1,1; 1,1,-1];
 for i=1:n_test
     for c = 1:3 % we go through this extra loop to load the extra starting values
         % this ensures that the algorithm won't get stuck in local minima
         % and will converge in a reasonable number of
-        % iterations,f evaluations
-        [return_rgb(i,:,c),fval(i,c)] = fmincon(@(T_rgb)opt_primaries_cont...
-            (T_rgb,wls(i),primaries,[L;M;S]),startp(c,:),...
+        % iterations/f evaluations
+        [return_CMF(i,:,c),fval(i,c)] = fmincon(@(T_rgb)opt_primaries_cont...
+            (T_rgb,test_wls(i),primaries,[L;M;S]),startp(c,:),...
             [],[],[],[],minp,maxp,[], options);
     end
     [cont_fval(i),position(i)] = min(fval(i,:));
-    cont_rgb(i,:) = return_rgb(i,:,position(i));
+    cont_CMF(i,:) = return_CMF(i,:,position(i));
 end
 
 % saving output CMFs
-save('algorithm_CMFs','cont_rgb','diff_rgb','ndiff_rgb')
+save('algorithm_CMFs','cont_CMF','diff_CMF','ndiff_CMF')
 
 
-%% Plot output CMFs against SNB data
+%% Plot output CMFs against S&B data
 
 figure
 
 subplot(3,1,1)
-title('using sum of squared cone contrast')
-r = plot(wls_snb,snb_rgb(:,1),'r','LineWidth',5); hold on
-rm = plot(wls_snb,cont_rgb(:,1),'r:','LineWidth',2);
+r = plot(test_wls,snb_CMF(:,1),'r','LineWidth',5); hold on
+rm = plot(test_wls,cont_CMF(:,1),'r:','LineWidth',2);
 r.Color(4) = 0.25;
 rm.Color(4) = 0.75;
-g = plot(wls_snb,snb_rgb(:,2),'g','LineWidth',5); hold on
-gm = plot(wls_snb,cont_rgb(:,2),'g:','LineWidth',2);
+g = plot(test_wls,snb_CMF(:,2),'g','LineWidth',5); hold on
+gm = plot(test_wls,cont_CMF(:,2),'g:','LineWidth',2);
 g.Color(4) = 0.25;
 gm.Color(4) = 0.75;
-b = plot(wls_snb,snb_rgb(:,3),'b','LineWidth',5); hold on
-bm = plot(wls_snb,cont_rgb(:,3),'b:','LineWidth',2);
+b = plot(test_wls,snb_CMF(:,3),'b','LineWidth',5); hold on
+bm = plot(test_wls,cont_CMF(:,3),'b:','LineWidth',2);
 b.Color(4) = 0.25;
 bm.Color(4) = 0.75;
 legend({'r SNB','r model','g SNB','g model','b SNB','b model'})
+title('using sum of squared cone contrast')
 
 subplot(3,1,2)
+r = plot(test_wls,snb_CMF(:,1),'r','LineWidth',5); hold on
+rm = plot(test_wls,diff_CMF(:,1),'r:','LineWidth',2);
+r.Color(4) = 0.25;
+rm.Color(4) = 0.75;
+g = plot(test_wls,snb_CMF(:,2),'g','LineWidth',5); hold on
+gm = plot(test_wls,diff_CMF(:,2),'g:','LineWidth',2);
+g.Color(4) = 0.25;
+gm.Color(4) = 0.75;
+b = plot(test_wls,snb_CMF(:,3),'b','LineWidth',5); hold on
+bm = plot(test_wls,diff_CMF(:,3),'b:','LineWidth',2);
+b.Color(4) = 0.25;
+bm.Color(4) = 0.75;
 title('using sum of squared differences (non-normalized)')
-r = plot(wls_snb,snb_rgb(:,1),'r','LineWidth',5); hold on
-rm = plot(wls_snb,diff_rgb(:,1),'r:','LineWidth',2);
-r.Color(4) = 0.25;
-rm.Color(4) = 0.75;
-g = plot(wls_snb,snb_rgb(:,2),'g','LineWidth',5); hold on
-gm = plot(wls_snb,diff_rgb(:,2),'g:','LineWidth',2);
-g.Color(4) = 0.25;
-gm.Color(4) = 0.75;
-b = plot(wls_snb,snb_rgb(:,3),'b','LineWidth',5); hold on
-bm = plot(wls_snb,diff_rgb(:,3),'b:','LineWidth',2);
-b.Color(4) = 0.25;
-bm.Color(4) = 0.75;
 
-title('using sum of squared differences (normalized)')
 subplot(3,1,3)
-r = plot(wls_snb,snb_rgb(:,1),'r','LineWidth',5); hold on
-rm = plot(wls_snb,ndiff_rgb(:,1),'r:','LineWidth',2);
+r = plot(test_wls,snb_CMF(:,1),'r','LineWidth',5); hold on
+rm = plot(test_wls,ndiff_CMF(:,1),'r:','LineWidth',2);
 r.Color(4) = 0.25;
 rm.Color(4) = 0.75;
-g = plot(wls_snb,snb_rgb(:,2),'g','LineWidth',5); hold on
-gm = plot(wls_snb,ndiff_rgb(:,2),'g:','LineWidth',2);
+g = plot(test_wls,snb_CMF(:,2),'g','LineWidth',5); hold on
+gm = plot(test_wls,ndiff_CMF(:,2),'g:','LineWidth',2);
 g.Color(4) = 0.25;
 gm.Color(4) = 0.75;
-b = plot(wls_snb,snb_rgb(:,3),'b','LineWidth',5); hold on
-bm = plot(wls_snb,ndiff_rgb(:,3),'b:','LineWidth',2);
+b = plot(test_wls,snb_CMF(:,3),'b','LineWidth',5); hold on
+bm = plot(test_wls,ndiff_CMF(:,3),'b:','LineWidth',2);
 b.Color(4) = 0.25;
 bm.Color(4) = 0.75;
-
+title('using sum of squared differences (normalized)')
 
 %% Function for the difference minimization algorithms
 
-function sqdiff = opt_primaries_diff(T_rgb,wls_test,primaries,cone_sens)
+function sqdiff = opt_primaries_diff(CMF,wls_test,primaries,cone_sens)
 
-if sum(T_rgb<0)~=1
+if sum(CMF<0)~=1
     sqdiff = inf;   % catch if more than one primary is negative
 else
     
     % sort negative and positive primaries
-    neg_prim = find(T_rgb<0);
-    pos_prim(:) = find(T_rgb>0);
+    neg_prim = find(CMF<0);
+    pos_prim(:) = find(CMF>0);
     
     wls = (390:1:830)';  % wavelengths for spectra
     n_wls = length(wls);
@@ -158,11 +158,11 @@ else
       
     % construct test spectrum
     spdt = spdt+gauss(1,wls_test);
-    spdt = spdt+gauss(abs(T_rgb(neg_prim)),primaries(neg_prim));
+    spdt = spdt+gauss(abs(CMF(neg_prim)),primaries(neg_prim));
 
     % construct match spectrum
-    spdm = spdm+gauss(T_rgb(pos_prim(1)),primaries(pos_prim(1)));
-    spdm = spdm+gauss(T_rgb(pos_prim(2)),primaries(pos_prim(2)));
+    spdm = spdm+gauss(CMF(pos_prim(1)),primaries(pos_prim(1)));
+    spdm = spdm+gauss(CMF(pos_prim(2)),primaries(pos_prim(2)));
     
     % calculate cone stimulation
     stimm = cone_sens(1:3,:)*spdm;
@@ -176,15 +176,15 @@ end
 
 %% Function for the contrast minimization algorithms
 
-function sqcont = opt_primaries_cont(T_rgb,wls_test,primaries,cone_sens)
+function sqcont = opt_primaries_cont(CMF,wls_test,primaries,cone_sens)
 
-if sum(T_rgb<0)~=1
+if sum(CMF<0)~=1
     sqcont = inf;   % catch if more than one primary is negative    
 else
     
     % sort negative and positive primaries
-    neg_prim = find(T_rgb<0);
-    pos_prim(:) = find(T_rgb>0);
+    neg_prim = find(CMF<0);
+    pos_prim(:) = find(CMF>0);
     
     wls = (390:1:830)';  % wavelengths for spectra
     n_wls = length(wls);
@@ -197,11 +197,11 @@ else
       
     % construct test spectrum
     spdt = spdt+gauss(1,wls_test);
-    spdt = spdt+gauss(abs(T_rgb(neg_prim)),primaries(neg_prim));
+    spdt = spdt+gauss(abs(CMF(neg_prim)),primaries(neg_prim));
 
     % construct match spectrum
-    spdm = spdm+gauss(T_rgb(pos_prim(1)),primaries(pos_prim(1)));
-    spdm = spdm+gauss(T_rgb(pos_prim(2)),primaries(pos_prim(2)));
+    spdm = spdm+gauss(CMF(pos_prim(1)),primaries(pos_prim(1)));
+    spdm = spdm+gauss(CMF(pos_prim(2)),primaries(pos_prim(2)));
     
     % calculate cone stimulation for test and match lights
     L = cone_sens(1,:);

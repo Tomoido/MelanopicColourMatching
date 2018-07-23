@@ -1,5 +1,4 @@
-%
-% PRELIMINARIES
+%%  PRELIMINARIES
 % -------------
 % 0. Get a GitHub account fromhttps://github.com and send me your login name
 % 1. Install GitHub client from https://desktop.github.com
@@ -18,11 +17,13 @@
 % http://www.ling.upenn.edu/courses/ling525/color_vision.html
 
 
-% CONE SPECTRAL SENSITIVITIES
+%% CONE SPECTRAL SENSITIVITIES
 % ---------------------------
-% wls = (380:1:780)';
-wls = (390:1:830)';
 
+clear
+
+% Wavelengths
+wls = (390:1:830)'; 
 S = WlsToS(wls);
 
 % Change age
@@ -37,87 +38,127 @@ S = WlsToS(wls);
 
 % Change field size
 % receptorObjFieldSize2Deg = SSTReceptorHuman('S', S, 'fieldSizeDeg', 2);
-receptorObjFieldSize10Deg = SSTReceptorHuman('S', S, 'fieldSizeDeg', 10);
+% receptorObjFieldSize10Deg = SSTReceptorHuman('S', S, 'fieldSizeDeg', 10);
 
 % Plot one of them
 % plot(wls, receptorObjFieldSize2Deg.T.T_energyNormalized', '--k');
 
 % Export onto new variables for easy access
-T_receptors = receptorObjFieldSize10Deg.T.T_energy;
+receptorObj = SSTReceptorHuman('S', S, 'fieldSizeDeg', 10); % 10 degree field 
+T_receptors = receptorObj.T.T_energyNormalized; % using normalized cone sensitivities
 L = T_receptors(1,:);
 M = T_receptors(2,:);
 S = T_receptors(3,:);
 mel = T_receptors(4,:);
 
-% 
-% mat0 = csvread('linss10e_1.csv');
-% mat0 = csvread('ss10e_1.csv');
- 
-% T_receptors = receptorObjFieldSize10Deg.T.T_energyNormalized;
-% L = mat0(:,2)';
-% M = mat0(:,3)';
-% S = mat0(:,4)';
-% mel = T_receptors(4,:);
-
-
-% COLOR MATCHING DATA
+%% S&B COLOR MATCHING DATA
 % -------------------
+% If using Stiles&Burch color matching data, run this section of the
+% code. If not, skip this section and use the next section of the code
+% generates CMFs for a chosen set of primaries.
+
+% Load S&B color matching data
 mat = csvread('sbrgb10w.csv');
-wls_snb = mat(:, 1);
-snb_rgb = mat(:, 2:4);
+test_wls = mat(:, 1);
+CMF = mat(:, 2:4);
+r_match = round(645.16);
+g_match = round(526.32);
+b_match = round(444.44);
+primaries = [r_match g_match b_match];
 
 
-% Construct match and test spectra
-r_snb = round(645.16);
-g_snb = round(526.32);
-b_snb = round(444.44);
-rgb_wls = [r_snb g_snb b_snb];
+%% GENERATE CMF FOR A CHOSEN SET OF PRIMARIES
+% -------------------------------------------
+% If using Stiles&Burch color matching data, skip this section of the code.
 
-n_snb = length(wls_snb);
+% set up primaries
+r_match = round(645); 
+g_match = round(526); 
+b_match = round(480);
+primaries = [r_match g_match b_match];
+
+test_wls = (390:5:810)';
+n_test = length(test_wls);
+    
+startp = [-1,1,1];
+minp = [-10,-10,-10];
+maxp = [20,20,20];
+
+options = optimoptions('fmincon','Display', 'iter',...
+    'Algorithm','sqp', ...
+    'OptimalityTolerance',      0,...
+    'StepTolerance',            0,...
+    'MaxIterations',            3e3,...
+    'MaxFunctionEvaluations',   3e3);
+
+for i=1:n_test
+    [CMF(i,:), T_fval(i)] = fmincon(@(CMF)opt_primaries_diff...
+        (CMF,test_wls(i),primaries,[L;M;S],wls),startp,...
+        [],[],[],[],minp,maxp,[], options);
+end
+
+% plot CMF
+figure; hold on;
+plot(test_wls,CMF(:,1), 'r', 'LineWidth', 2)
+plot(test_wls,CMF(:,2), 'g', 'LineWidth', 2)
+plot(test_wls,CMF(:,3), 'b', 'LineWidth', 2)
+
+%% CONSTRUCT TEST AND MATCH SPECTRA
+% Construct match and test spectra (assuming Gaussian shape)
+
+n_test = length(test_wls);
 n_wls = length(wls);
-wls2 = repmat(wls,1,n_snb);
-spdt = zeros(n_wls,n_snb);
-spdm = zeros(n_wls,n_snb);
+wls2 = repmat(wls,1,n_test);
+spdt = zeros(n_wls,n_test);
+spdm = zeros(n_wls,n_test);
 
-% constructing spectra assuming a gaussian shape of primaries and test
 FWHM = 10; % FWMH of gaussian based on interference filter properties
 sigma = FWHM/2.4; % stdev of gaussian
 gauss = @(height,position)height.*exp(-((wls-position).^2)/(2*sigma^2));
 
-for i=1:n_snb
-    neg_prim = find(snb_rgb(i,:)<0);
-    pos_prim(:) = find(snb_rgb(i,:)>0);
+for i=1:n_test
+    neg_prim = find(CMF(i,:)<0);  % identify negative primary
+    pos_prim(:) = find(CMF(i,:)>0);  % identify positive primaries
     
-    spdt(:,i) = spdt(:,i)+gauss(1,wls_snb(i));
-    spdt(:,i) = spdt(:,i)+gauss(abs(snb_rgb(i,neg_prim)),rgb_wls(neg_prim));
+    % test spectrum using test light and negative primary
+    spdt(:,i) = spdt(:,i)+gauss(1,test_wls(i));
+    spdt(:,i) = spdt(:,i)+gauss(abs(CMF(i,neg_prim)),primaries(neg_prim));
     
-    spdm(:,i) = spdm(:,i)+gauss(snb_rgb(i,pos_prim(1)),rgb_wls(pos_prim(1)));
-    spdm(:,i) = spdm(:,i)+gauss(snb_rgb(i,pos_prim(2)),rgb_wls(pos_prim(2)));
+    % match spectrum using positive primaries
+    spdm(:,i) = spdm(:,i)+gauss(CMF(i,pos_prim(1)),primaries(pos_prim(1)));
+    spdm(:,i) = spdm(:,i)+gauss(CMF(i,pos_prim(2)),primaries(pos_prim(2)));
 end
 
-
 % % if using delta function to construct spectra uncomment below:
-% for i=1:n_snb
-%     spd1(wls2(:,i)==wls_snb(i),i)=1;  % test light
-%     spd2(wls2(:,i)==r_snb,i)=snb_rgb(i,1);  % red priamry
-%     spd2(wls2(:,i)==g_snb,i)=snb_rgb(i,2);  % green primary
-%     spd2(wls2(:,i)==b_snb,i)=snb_rgb(i,3);  % blue primary
+% for i=1:n_test
+%     neg_prim = find(CMF(i,:)<0);
+%     pos_prim(:) = find(CMF(i,:)>0);
+%     
+%     spdt(wls2(:,i)==test_wls(i),i)=1;  % test light
+%     spdt(wls2(:,i)==primaries(neg_prim),i)=CMF(i,neg_prim); % negative primary
+%     
+%     spdm(wls2(:,i)==primaries(pos_prim(1)),i)=CMF(i,pos_prim(1));  % positive primaries
+%     spdm(wls2(:,i)==primaries(pos_prim(2)),i)=CMF(i,pos_prim(2));  
 % end
 
-% plot test and match spectra
-figure; hold on; 
-subplot(2,1,1); plot(wls,spdt); title('test spectra'); pbaspect([3 1 1]);
-subplot(2,1,2); plot(wls,spdm); title('match spectra'); pbaspect([3 1 1]);
-% plot one example test and match spectrum
-figure; hold on; 
-subplot(2,1,1); hold on; plot(wls,spdt(:,52)); title('test spectrum'); 
-plot(xlim, [0,0], 'k:'); pbaspect([3 1 1]);
-subplot(2,1,2); hold on; plot(wls,spdm(:,52)); title('match spectrum'); 
-plot(xlim, [0,0], 'k:'); pbaspect([3 1 1]);
+
+% % plot test and match spectra
+% figure; hold on; 
+% subplot(2,1,1); plot(wls,spdt); title('test spectra'); pbaspect([3 1 1]);
+% subplot(2,1,2); plot(wls,spdm); title('match spectra'); pbaspect([3 1 1]);
+% 
+% % plot test and match spectrum for a given wavelength
+% wavelength = 500;  % choose wavelength
+% wavelength_ind = find(test_wls==wavelength);
+% figure; hold on; 
+% subplot(2,1,1); hold on; plot(wls,spdt(:,wavelength_ind)); title('test spectrum'); 
+% plot(xlim, [0,0], 'k:'); pbaspect([3 1 1]);
+% subplot(2,1,2); hold on; plot(wls,spdm(:,wavelength_ind)); title('match spectrum'); 
+% plot(xlim, [0,0], 'k:'); pbaspect([3 1 1]);
 
 
-% MELANOPSIN AND CONE STIMULATION
-% -------------------
+%% MELANOPSIN AND CONE STIMULATION
+% --------------------------------
 
 % calculate cone and melanopsin stimulation
 L_stimt = L*spdt;
@@ -128,56 +169,10 @@ S_stimt = S*spdt;
 S_stimm = S*spdm;
 mel_stimt = mel*spdt;
 mel_stimm = mel*spdm;
-% plot cone and melanopic stimulation as a function of wavelength
-figure; hold on; 
-plot(wls_snb,L_stimt,'r'); plot(wls_snb,L_stimm,'rx');
-plot(wls_snb,M_stimt,'g'); plot(wls_snb,M_stimm,'gx');  
-plot(wls_snb,S_stimt,'b'); plot(wls_snb,S_stimm,'bx'); 
-plot(wls_snb,mel_stimt,'c'); plot(wls_snb,mel_stimm,'cx'); 
-legend({'L cone test', 'L cone macth', 'M cone test', 'M cone match', ...
-    'S cone test', 'S cone match', 'melanopsin test', 'melanopsin match'})
-% zooming in on individuals receptor types
-figure; hold on; 
-subplot(2,2,1); hold on; plot(wls_snb,L_stimt,'r'); plot(wls_snb,L_stimm,'rx'); 
-title('L cone stimulation'); plot(xlim, [0,0], 'k:'); pbaspect([2 1 1]);
-subplot(2,2,2); hold on; plot(wls_snb,M_stimt,'g'); plot(wls_snb,M_stimm,'gx'); 
-title('M cone stimulation'); plot(xlim, [0,0], 'k:'); pbaspect([2 1 1]);
-subplot(2,2,3); hold on; plot(wls_snb,S_stimt,'b'); plot(wls_snb,S_stimm,'bx'); 
-title('S cone stimulation'); plot(xlim, [0,0], 'k:'); pbaspect([2 1 1]);
-subplot(2,2,4); hold on; plot(wls_snb,mel_stimt,'c'); plot(wls_snb,mel_stimm,'cx'); 
-title('melanopsin stimulation'); plot(xlim, [0,0], 'k:'); pbaspect([2 1 1]);
-
-% calculate cone and melanopsin contrast
-L_cont = (L_stimt-L_stimm)./(L_stimm);
-M_cont = (M_stimt-M_stimm)./(M_stimm);
-S_cont = (S_stimt-S_stimm)./(S_stimm);
-mel_cont = (mel_stimt-mel_stimm)./(mel_stimm);
-
-% plot contrast as a function of test wavelength
-figure; hold on; pbaspect([2 1 1]);
-plot(wls_snb,mel_cont, 'c', 'LineWidth', 2)
-plot(wls_snb,L_cont, 'r--')
-plot(wls_snb,M_cont, 'g--')
-plot(wls_snb,S_cont, 'b--')
-plot(xlim, [0,0], 'k:')
-legend({'melanopic contr', 'L cone contr', 'M cone contr', 'S cone contr', ''})
-
-% plot S cone and melanopsin contrast separately
-figure; hold on
-subplot(2,1,1); hold on; plot(wls_snb,mel_cont, 'c', 'LineWidth', 2); 
-title('Melanopic contrast'); plot(xlim, [0,0], 'k:')
-subplot(2,1,2); hold on; plot(wls_snb,mel_stimt, 'c'); 
-plot(wls_snb,mel_stimm, 'cx'); 
-plot(xlim, [0,0], 'k:');  title('Melanopsin stimulation'); 
-legend({'melanopsin test', 'melanopsin match',''})
-
-figure; hold on
-subplot(2,1,1); hold on; plot(wls_snb,S_cont, 'b', 'LineWidth', 2); 
-title('S cone contrast'); plot(xlim, [0,0], 'k:')
-subplot(2,1,2); hold on; plot(wls_snb,S_stimt, 'b'); 
-plot(wls_snb,S_stimm, 'bx'); 
-plot(xlim, [0,0], 'k:'); title('S cone stimulation'); 
-legend({'S cone test', 'S cone match',''})
+mel_wls = find(test_wls==390):find(test_wls==620);  % not calculating melanopsin 
+% stimulation 3 log units above and below the nominal max sensitivity
+mel_stimt = mel_stimt(mel_wls);                  
+mel_stimm = mel_stimm(mel_wls);
 
 % calculate cone and melanopsin difference in stimulation
 L_diff = (L_stimt-L_stimm);
@@ -185,137 +180,116 @@ M_diff = (M_stimt-M_stimm);
 S_diff = (S_stimt-S_stimm);
 mel_diff = (mel_stimt-mel_stimm);
 
-% plot difference as a function of test wavelength
-figure; hold on; pbaspect([2 1 1]);
-plot(wls_snb,mel_diff, 'c', 'LineWidth', 2)
-plot(wls_snb,L_diff, 'r--')
-plot(wls_snb,M_diff, 'g--')
-plot(wls_snb,S_diff, 'b--')
-plot(xlim, [0,0], 'k:')
-legend({'melanopic diff', 'L cone diff', 'M cone diff', 'S cone diff', ''})
+% calculate cone and melanopsin contrast
+L_cont = (L_stimt-L_stimm)./(L_stimm);
+M_cont = (M_stimt-M_stimm)./(M_stimm);
+S_cont = (S_stimt-S_stimm)./(S_stimm);
+mel_cont = (mel_stimt-mel_stimm)./(mel_stimm);
+
+
+%% PLOT RECEPTOR STIMULATION AND CONTRAST
+% ---------------------------------------
+
+% plot cone and melanopic stimulation as a function of wavelength
+figure; subplot(4,2,[1 2 3 4]); hold on; 
+plot(test_wls,L_stimt,'r'); plot(test_wls,L_stimm,'rx');
+plot(test_wls,M_stimt,'g'); plot(test_wls,M_stimm,'gx');  
+plot(test_wls,S_stimt,'b'); plot(test_wls,S_stimm,'bx'); 
+plot(test_wls(mel_wls),mel_stimt,'c'); plot(test_wls(mel_wls),mel_stimm,'cx'); 
+legend({'L cone test', 'L cone macth', 'M cone test', 'M cone match', ...
+    'S cone test', 'S cone match', 'melanopsin test', 'melanopsin match'})
+title('receptor stimulation'); plot(xlim, [0,0], 'k:'); 
+% zooming in on individuals receptor types
+subplot(4,2,5); hold on; plot(test_wls,L_stimt,'r'); plot(test_wls,L_stimm,'rx'); 
+title('L cone stimulation'); plot(xlim, [0,0], 'k:'); 
+subplot(4,2,6); hold on; plot(test_wls,M_stimt,'g'); plot(test_wls,M_stimm,'gx'); 
+title('M cone stimulation'); plot(xlim, [0,0], 'k:');
+subplot(4,2,7); hold on; plot(test_wls,S_stimt,'b'); plot(test_wls,S_stimm,'bx'); 
+title('S cone stimulation'); plot(xlim, [0,0], 'k:'); 
+subplot(4,2,8); hold on; plot(test_wls(mel_wls),mel_stimt,'c'); 
+plot(test_wls(mel_wls),mel_stimm,'cx'); 
+title('melanopsin stimulation'); plot(xlim, [0,0], 'k:'); 
+
+% % plot difference in receptor stimulation as a function of test wavelength
+% figure; hold on; pbaspect([2 1 1]);
+% plot(test_wls(mel_wls),mel_diff, 'c', 'LineWidth', 2)
+% plot(test_wls,L_diff, 'r--')
+% plot(test_wls,M_diff, 'g--')
+% plot(test_wls,S_diff, 'b--')
+% plot(xlim, [0,0], 'k:')
+% legend({'melanopic diff', 'L cone diff', 'M cone diff', 'S cone diff', ''})
+
+% % plot receptor contrast as a function of test wavelength
+% figure; hold on; pbaspect([2 1 1]);
+% plot(test_wls(mel_wls),mel_cont, 'c', 'LineWidth', 2)
+% plot(test_wls,L_cont, 'r--')
+% plot(test_wls,M_cont, 'g--')
+% plot(test_wls,S_cont, 'b--')
+% plot(xlim, [0,0], 'k:')
+% legend({'melanopic contr', 'L cone contr', 'M cone contr', 'S cone contr', ''})
+
+% plot melanopsin contrast and difference in stimulation separately
+figure; hold on
+subplot(3,1,1); hold on; plot(test_wls(mel_wls),mel_stimt, 'c', 'LineWidth', 2); 
+plot(test_wls(mel_wls),mel_stimm, 'cx', 'LineWidth', 2); 
+plot(xlim, [0,0], 'k:');  title('Melanopsin stimulation'); 
+legend({'melanopsin test', 'melanopsin match',''})
+subplot(3,1,2); hold on; plot(test_wls(mel_wls),mel_diff, 'c', 'LineWidth', 2); 
+title('Melanopic stimulation difference'); plot(xlim, [0,0], 'k:')
+subplot(3,1,3); hold on; plot(test_wls(mel_wls),mel_cont, 'c', 'LineWidth', 2); 
+title('Melanopic contrast'); plot(xlim, [0,0], 'k:')
+
+% % plot S cone contrast separately
+% figure; hold on
+% subplot(2,1,1); hold on; plot(test_wls,S_cont, 'b', 'LineWidth', 2); 
+% title('S cone contrast'); plot(xlim, [0,0], 'k:')
+% subplot(2,1,2); hold on; plot(test_wls,S_stimt, 'b'); 
+% plot(test_wls,S_stimm, 'bx'); 
+% plot(xlim, [0,0], 'k:'); title('S cone stimulation'); 
+% legend({'S cone test', 'S cone match',''})
 
 
 
 
-%%
+%% CMF GENERATION ALGORITHM FUNCTION
+%-----------------------------------
 
-% CHNAGING PRIMARIES
-% -------------------
+% This section contains the function for the algorithm generating the CMF
+% for a given set of non-overlapping primaries
 
-clear 
+function sqdiff = opt_primaries_diff(CMF,wls_test,primaries,cone_sens,range)
 
-wls = (390:1:830)';
-S = WlsToS(wls);
-receptorObjFieldSize10Deg = SSTReceptorHuman('S', S, 'fieldSizeDeg', 10);
-T_receptors = receptorObjFieldSize10Deg.T.T_energyNormalized;
-L = T_receptors(1,:);
-M = T_receptors(2,:);
-S = T_receptors(3,:);
-mel = T_receptors(4,:);
-
-r_match = round(645.16);
-g_match = round(526.32);
-b_match = round(444.44);
-primaries = [r_match,g_match,b_match];
-
-wls_test = (390:5:830)';
-n_test = length(wls_test);
-    
-startp = [-1,1,1; 1,-1,1; 1,1,-1];
-minp = [-5,-5,-5];
-maxp = [5,5,5];
-% options = optimset('TolCon', 1e-10000);
-options = optimoptions('fmincon','Display',        'none',...
-    'OptimalityTolerance',      0,...
-    'StepTolerance',            0,...
-    'MaxIterations',            3e3,...
-    'MaxFunctionEvaluations',   3e3);
-
-tic                   
-
-% options = optimoptions('fmincon', 'Display','iter','Diagnostics','on');
-
-for i=1:n_test
-    for c = 1:3
-        [return_rgb(i,:,c),fval(i,c)] = fmincon(@(T_rgb)opt_primaries...
-            (T_rgb,wls_test(i),primaries,[L;M;S]),startp(c,:),...
-            [],[],[],[],minp,maxp,[], options);
-    end
-    [sumsqcontr(i),position(i)] = min(fval(i,:));
-    T_rgb(i,:) = return_rgb(i,:,position(i));
-end
-
-
-
-% for l=1:n_test
-%     [L_cont(l) M_cont(l) S_cont(l)] = opt_primaries_return(T_rgb(l,:),wls_test(l),primaries,[L;M;S]);
-% end
-
-toc
-%% 
-
-figure
-r = plot(wls_test,snb_rgb(:,1),'r','LineWidth',5); hold on
-rm = plot(wls_test,T_rgb(:,1),'r:','LineWidth',2);
-r.Color(4) = 0.25;
-rm.Color(4) = 0.75;
-g = plot(wls_test,snb_rgb(:,2),'g','LineWidth',5); hold on
-gm = plot(wls_test,T_rgb(:,2),'g:','LineWidth',2);
-g.Color(4) = 0.25;
-gm.Color(4) = 0.75;
-b = plot(wls_test,snb_rgb(:,3),'b','LineWidth',5); hold on
-bm = plot(wls_test,T_rgb(:,3),'b:','LineWidth',2);
-b.Color(4) = 0.25;
-bm.Color(4) = 0.75;
-title('using sum of squared (non-normalized) differences')
-legend({'r SNB','r model','g SNB','g model','b SNB','b model'})
-
-%%
-
-function sqdiff = opt_primaries(T_rgb,wls_test,primaries,cone_sens)
-
-if sum(T_rgb<0)~=1
-    sqdiff = inf;    
+if sum(CMF<0)~=1
+    sqdiff = inf;   % catch if more than one primary is negative
 else
-    wls = (390:1:830)';
-
+    
+    % sort negative and positive primaries
+    neg_prim = find(CMF<0);
+    pos_prim(:) = find(CMF>0);
+    
+    wls=range;
     n_wls = length(wls);
-    spdt = zeros(n_wls,1);
-    spdm = zeros(n_wls,1);
+    spdt = zeros(n_wls,1);  % test spectrum var
+    spdm = zeros(n_wls,1);  % match spectrum var
 
-    FWHM = 10; 
+    FWHM = 10; % half width of gaussian based on interference filter properties
     sigma = FWHM/2.4; 
     gauss = @(height,position)height.*exp(-((wls-position).^2)/(2*sigma^2));
-        
-    neg_prim = find(T_rgb<0);
-    pos_prim(:) = find(T_rgb>0);
-
+      
+    % construct test spectrum
     spdt = spdt+gauss(1,wls_test);
-    spdt = spdt+gauss(abs(T_rgb(neg_prim)),primaries(neg_prim));
+    spdt = spdt+gauss(abs(CMF(neg_prim)),primaries(neg_prim));
 
-    spdm = spdm+gauss(T_rgb(pos_prim(1)),primaries(pos_prim(1)));
-    spdm = spdm+gauss(T_rgb(pos_prim(2)),primaries(pos_prim(2)));
-
-
+    % construct match spectrum
+    spdm = spdm+gauss(CMF(pos_prim(1)),primaries(pos_prim(1)));
+    spdm = spdm+gauss(CMF(pos_prim(2)),primaries(pos_prim(2)));
+    
+    % calculate cone stimulation
     stimm = cone_sens(1:3,:)*spdm;
     stimt = cone_sens(1:3,:)*spdt;
 
-%     sqdiff = sum((stimt-stimm).^2);
+    % calculate sum of squared differences in stimulation
+    sqdiff = sum((stimt-stimm).^2);
     
-    L = cone_sens(1,:);
-    M = cone_sens(2,:);
-    S = cone_sens(3,:);
-    L_stimt = L*spdt;
-    L_stimm = L*spdm;
-    M_stimt = M*spdt;
-    M_stimm = M*spdm;
-    S_stimt = S*spdt;
-    S_stimm = S*spdm;
-    L_cont = ((L_stimt-L_stimm)./(L_stimm))*100;
-    M_cont = ((M_stimt-M_stimm)./(M_stimm))*100;
-    S_cont = ((S_stimt-S_stimm)./(S_stimm))*100;
-    
-    sqdiff = (L_cont.^2+M_cont.^2+S_cont.^2);
 end
 end
-
