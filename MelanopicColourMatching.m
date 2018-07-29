@@ -174,6 +174,7 @@ mel_wls = find(test_wls==390):find(test_wls==620);  % not calculating melanopsin
 mel_stimt = mel_stimt(mel_wls);                  
 mel_stimm = mel_stimm(mel_wls);
 
+
 % calculate cone and melanopsin difference in stimulation
 L_diff = (L_stimt-L_stimm);
 M_diff = (M_stimt-M_stimm);
@@ -191,7 +192,7 @@ mel_cont = (mel_stimt-mel_stimm)./(mel_stimm);
 % ---------------------------------------
 
 % plot cone and melanopic stimulation as a function of wavelength
-figure; subplot(4,2,[1 2 3 4]); hold on; 
+figure('Color',[1 1 1]); subplot(4,2,[1 2 3 4]); hold on; 
 plot(test_wls,L_stimt,'r'); plot(test_wls,L_stimm,'rx');
 plot(test_wls,M_stimt,'g'); plot(test_wls,M_stimm,'gx');  
 plot(test_wls,S_stimt,'b'); plot(test_wls,S_stimm,'bx'); 
@@ -229,7 +230,7 @@ title('melanopsin stimulation'); plot(xlim, [0,0], 'k:');
 % legend({'melanopic contr', 'L cone contr', 'M cone contr', 'S cone contr', ''})
 
 % plot melanopsin contrast and difference in stimulation separately
-figure; hold on
+figure('Color',[1 1 1]); hold on
 subplot(3,1,1); hold on; plot(test_wls(mel_wls),mel_stimt, 'c', 'LineWidth', 2); 
 plot(test_wls(mel_wls),mel_stimm, 'cx', 'LineWidth', 2); 
 plot(xlim, [0,0], 'k:');  title('Melanopsin stimulation'); 
